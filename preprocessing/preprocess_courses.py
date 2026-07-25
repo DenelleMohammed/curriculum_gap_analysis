@@ -39,7 +39,7 @@ import spacy
 # Config
 # ---------------------------------------------------------------------------
 
-INPUT_FILE  = Path("outcomes_and_content.json")
+INPUT_FILE  = Path("data/raw/outcomes_and_content.json")
 OUTPUT_DIR  = Path("data/processed")
 OUTPUT_FILE = OUTPUT_DIR / "all_courses_preprocessed.jsonl"
 
