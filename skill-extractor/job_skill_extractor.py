@@ -2,13 +2,17 @@
 """
 skill_extractor.py — Unified SkillNER-based skill extractor.
 
-Input  : data/processed/all_jobs_preprocessed.jsonl
-Output : data/skills/all_jobs_skills.jsonl
+Runs the same two-pass extraction independently over each preprocessed
+job file, so the MIN_FREQ frequency filter is scoped to each category's
+own population rather than being diluted/inflated by the other category:
 
-Processes all sources (LinkedIn, Workopolis, Reed) filtered to
-Data Scientist roles only. Applies two-pass extraction:
+  data/processed/all_jobs_preprocessed.jsonl          -> data/skills/all_jobs_skills.jsonl
+  data/processed/data_science_jobs_preprocessed.jsonl -> data/skills/data_science_jobs_skills.jsonl
+  data/processed/unrelated_jobs_preprocessed.jsonl     -> data/skills/unrelated_jobs_skills.jsonl
+
+Two-pass extraction (applied per file):
   Pass 1 — Extract and score skills per record
-  Pass 2 — Drop skills below MIN_FREQ threshold globally
+  Pass 2 — Drop skills below MIN_FREQ threshold (within that file's population)
 """
 
 import json
@@ -28,14 +32,22 @@ from skillNer.skill_extractor_class import SkillExtractor
 # CONFIG
 # ==============================
 
-INPUT_FILE  = Path("data/processed/all_jobs_preprocessed.jsonl")
-OUTPUT_FILE = Path("data/skills/all_jobs_skills.jsonl")
+PROCESSED_DIR = Path("data/processed")
+SKILLS_DIR    = Path("data/skills")
+
+# (label, input file, output file) — each processed independently so
+# MIN_FREQ is computed within that category's own population.
+JOB_FILES = [
+    ("all",          PROCESSED_DIR / "all_jobs_preprocessed.jsonl",          SKILLS_DIR / "all_jobs_skills.jsonl"),
+    ("data_science", PROCESSED_DIR / "data_science_jobs_preprocessed.jsonl", SKILLS_DIR / "data_science_jobs_skills.jsonl"),
+    ("unrelated",    PROCESSED_DIR / "unrelated_jobs_preprocessed.jsonl",    SKILLS_DIR / "unrelated_jobs_skills.jsonl"),
+]
 
 SPACY_MODEL = "en_core_web_sm"
 MIN_FREQ    = 3    # lower than previous project since we're scoped to one role
 
 VALID_SHORT_SKILLS = {"ai", "ml", "c", "r", "go", "c#", "c++"}
-INVALID_EXACT      = {"e", "etc", "eg", "ie", "tools e", "san"}
+INVALID_EXACT      = {"e", "etc", "eg", "ie", "tools e", "san", "com", "etc.", "eg.", "ie.", "tools e.", "san."}
 
 GENERIC_WORDS = {
     "build", "manage", "develop", "create", "support",
@@ -172,20 +184,10 @@ def extract_unique_skills(annotation: Dict[str, Any]) -> List[str]:
 # MAIN PIPELINE
 # ==============================
 
-def main():
-    if not INPUT_FILE.exists():
-        raise FileNotFoundError(f"Input file not found: {INPUT_FILE.resolve()}")
-
-    # Load spaCy
-    try:
-        nlp = spacy.load(
-            SPACY_MODEL,
-            disable=["parser", "ner", "textcat", "tagger", "lemmatizer"]
-        )
-    except OSError:
-        raise SystemExit(f"Run: python -m spacy download {SPACY_MODEL}")
-
-    skill_extractor = SkillExtractor(nlp, SKILL_DB, PhraseMatcher)
+def extract_skills_for_file(skill_extractor: SkillExtractor, label: str, input_file: Path, output_file: Path) -> None:
+    if not input_file.exists():
+        print(f"[SKIP] {label}: input file not found: {input_file.resolve()}")
+        return
 
     records: List[Dict[str, Any]] = []
     skill_counts: Counter = Counter()
@@ -196,9 +198,9 @@ def main():
     # PASS 1 — Extract skills
     # ==============================
 
-    print("[INFO] Pass 1: extracting skills...")
+    print(f"[INFO] [{label}] Pass 1: extracting skills from {input_file.name}...")
 
-    for rec in read_jsonl(INPUT_FILE):
+    for rec in read_jsonl(input_file):
         source       = rec.get("source", "unknown")
         region       = rec.get("region", "Unknown")
         job_title    = rec.get("job_title")
@@ -230,10 +232,10 @@ def main():
         })
 
     # ==============================
-    # PASS 2 — Frequency filter
+    # PASS 2 — Frequency filter (scoped to this file's population)
     # ==============================
 
-    print(f"[INFO] Pass 2: applying MIN_FREQ={MIN_FREQ} filter...")
+    print(f"[INFO] [{label}] Pass 2: applying MIN_FREQ={MIN_FREQ} filter...")
 
     for rec in records:
         rec["skills"] = [
@@ -245,12 +247,13 @@ def main():
     # SAVE
     # ==============================
 
-    write_jsonl(OUTPUT_FILE, records)
+    write_jsonl(output_file, records)
 
     kept_skills = [s for s, c in skill_counts.items() if c >= MIN_FREQ]
 
     print()
     print("=" * 50)
+    print(f"  [{label}]")
     print(f"  Records processed     : {len(records)}")
     print(f"  Extraction failures   : {failed}")
     print(f"  Unique skills kept    : {len(kept_skills)}")
@@ -264,8 +267,25 @@ def main():
         if count >= MIN_FREQ:
             print(f"    {skill:<35} {count}")
     print()
-    print(f"  Output: {OUTPUT_FILE.resolve()}")
+    print(f"  Output: {output_file.resolve()}")
     print("=" * 50)
+    print()
+
+
+def main():
+    # Load spaCy once and reuse the extractor across all files
+    try:
+        nlp = spacy.load(
+            SPACY_MODEL,
+            disable=["parser", "ner", "textcat", "tagger", "lemmatizer"]
+        )
+    except OSError:
+        raise SystemExit(f"Run: python -m spacy download {SPACY_MODEL}")
+
+    skill_extractor = SkillExtractor(nlp, SKILL_DB, PhraseMatcher)
+
+    for label, input_file, output_file in JOB_FILES:
+        extract_skills_for_file(skill_extractor, label, input_file, output_file)
 
 
 if __name__ == "__main__":
