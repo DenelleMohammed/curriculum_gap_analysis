@@ -4,9 +4,12 @@ course_skill_extractor.py — SkillNER-based skill extractor for all courses.
 
 Input  : data/processed/all_courses_preprocessed.jsonl
 Output :
-  - data/skills/all_courses_skills.jsonl   (all courses)
-  - data/skills/cs_courses_skills.jsonl     (CS thematic area only)
-  - data/skills/it_courses_skills.jsonl     (IT thematic area only)
+  - data/skills/all_courses_skills.jsonl         (all courses)
+  - data/skills/cs_courses_skills.jsonl          (CS thematic area only)
+  - data/skills/it_courses_skills.jsonl          (IT thematic area only)
+  - data/skills/cs_special_course_skills.jsonl   (B.Sc. Computer Science
+                                                   Special degree courses only,
+                                                   core + elective)
 
 Each output record contains:
   course_code     | e.g. "COMP 3605"
@@ -31,14 +34,32 @@ from skillNer.skill_extractor_class import SkillExtractor
 # CONFIG
 # ==============================
 
-INPUT_FILE   = Path("data/processed/all_courses_preprocessed.jsonl")
-OUTPUT_ALL   = Path("data/skills/all_courses_skills.jsonl")
-OUTPUT_CS    = Path("data/skills/cs_courses_skills.jsonl")
-OUTPUT_IT    = Path("data/skills/it_courses_skills.jsonl")
+INPUT_FILE     = Path("data/processed/all_courses_preprocessed.jsonl")
+OUTPUT_ALL     = Path("data/skills/all_courses_skills.jsonl")
+OUTPUT_CS      = Path("data/skills/cs_courses_skills.jsonl")
+OUTPUT_IT      = Path("data/skills/it_courses_skills.jsonl")
+OUTPUT_SPECIAL = Path("data/skills/cs_special_course_skills.jsonl")
 
 SPACY_MODEL          = "en_core_web_sm"
 NGRAM_SCORE_THRESHOLD = 0.55
 MAX_SKILL_TOKENS      = 6
+
+# B.Sc. Computer Science (Special) course list — core + elective
+CS_SPECIAL_COURSE_CODES = {
+    # Core — Level I
+    "COMP 1600", "COMP 1601", "COMP 1602", "COMP 1603", "COMP 1604",
+    "INFO 1600", "INFO 1601", "MATH 1115", "FOUN 1101", "FOUN 1105",
+    # Core — Level II/III
+    "COMP 2601", "COMP 2602", "COMP 2603", "COMP 2604", "COMP 2605",
+    "COMP 2606", "COMP 2611", "COMP 3601", "COMP 3602", "COMP 3603",
+    "COMP 3613", "INFO 2602", "INFO 2604", "INFO 3604", "MATH 2250",
+    "FOUN 1301",
+    # Elective — Level II/III
+    "COMP 3605", "COMP 3606", "COMP 3607", "COMP 3608", "COMP 3609",
+    "COMP 3610", "COMP 3611", "COMP 3612", "INFO 2605", "INFO 3600",
+    "INFO 3605", "INFO 3606", "INFO 3607", "INFO 3608", "INFO 3609",
+    "INFO 3610", "INFO 3611",
+}
 
 # Short tokens that are valid skills
 VALID_SINGLE_TOKENS = {"c", "r"}
@@ -297,9 +318,13 @@ def main() -> None:
     cs_rows = [r for r in rows if "computer_science"      in r.get("thematic_areas", [])]
     it_rows = [r for r in rows if "information_technology" in r.get("thematic_areas", [])]
 
-    write_jsonl(OUTPUT_ALL, rows)
-    write_jsonl(OUTPUT_CS,  cs_rows)
-    write_jsonl(OUTPUT_IT,  it_rows)
+    # Filter to B.Sc. Computer Science (Special) degree course list
+    special_rows = [r for r in rows if r.get("course_code") in CS_SPECIAL_COURSE_CODES]
+
+    write_jsonl(OUTPUT_ALL,     rows)
+    write_jsonl(OUTPUT_CS,      cs_rows)
+    write_jsonl(OUTPUT_IT,      it_rows)
+    write_jsonl(OUTPUT_SPECIAL, special_rows)
 
     print()
     print("=" * 50)
@@ -307,10 +332,12 @@ def main() -> None:
     print(f"  Extraction failures   : {failed}")
     print(f"  CS courses            : {len(cs_rows)}")
     print(f"  IT courses            : {len(it_rows)}")
+    print(f"  CS Special courses    : {len(special_rows)} / {len(CS_SPECIAL_COURSE_CODES)}")
     print()
     print(f"  Output (all)          : {OUTPUT_ALL.resolve()}")
     print(f"  Output (CS)           : {OUTPUT_CS.resolve()}")
     print(f"  Output (IT)           : {OUTPUT_IT.resolve()}")
+    print(f"  Output (CS Special)   : {OUTPUT_SPECIAL.resolve()}")
     print("=" * 50)
 
 
