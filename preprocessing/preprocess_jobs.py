@@ -3,17 +3,18 @@
 Unified job description preprocessor for SkillNER + LDA pipeline.
 
 Sources handled:
-  - LinkedIn       : data/raw/linkedin_jobs.jsonl          (JSONL format)
   - Workopolis     : data/raw/workopolis_jobs.json         (JSON array)
   - Reed UK        : data/raw/reed_jobs.json               (JSON array)
 
 Output:
-  - data/processed/all_jobs_preprocessed.jsonl
+  - data/processed/all_jobs_preprocessed.jsonl           (every job, all categories)
+  - data/processed/data_science_jobs_preprocessed.jsonl  (job_category == "AI" only)
+  - data/processed/unrelated_jobs_preprocessed.jsonl     (job_category == "Unrelated" only)
 
 Each output record contains:
   region         | "Caribbean" | "UK" | "Canada" | "International" | "Unknown"
-  job_category   | "AI" | "CS" | "IT" | "Unrelated" | "Unknown"
-  source         | "linkedin" | "workopolis" | "reed"
+  job_category   | "AI" | "Unrelated" | "Unknown"
+  source         | "workopolis" | "reed"
   search_term    | original search/query term used to find the job
   job_title      | job title as listed
   url            | source URL (None for LinkedIn records without one)
@@ -48,7 +49,9 @@ import spacy
 
 DATA_DIR   = Path("data/raw")
 OUTPUT_DIR = Path("data/processed")
-OUTPUT_FILE = OUTPUT_DIR / "all_jobs_preprocessed.jsonl"
+OUTPUT_FILE             = OUTPUT_DIR / "all_jobs_preprocessed.jsonl"
+OUTPUT_DATA_SCIENCE_FILE = OUTPUT_DIR / "data_science_jobs_preprocessed.jsonl"
+OUTPUT_UNRELATED_FILE    = OUTPUT_DIR / "unrelated_jobs_preprocessed.jsonl"
 
 LINKEDIN_FILE   = DATA_DIR / "linkedin_jobs.jsonl"
 WORKOPOLIS_FILE = DATA_DIR / "workopolis_jobs.json"
@@ -114,14 +117,21 @@ def detect_region_from_record(rec: Dict[str, Any], source: str) -> str:
     return detect_region_from_url(rec.get("url"))
 
 
-# Only process records that match this target role
+# Only process records for the target AI role or the unrelated-jobs comparison group
 TARGET_ROLE = "data scientist"
 
 
-def is_target_role(job_title: Optional[str], search_term: Optional[str]) -> bool:
+def is_target_role(job_title: Optional[str], search_term: Optional[str], raw_category: Optional[str] = None) -> bool:
     jt = (job_title or "").lower()
     st = (search_term or "").lower()
-    return "data scientist" in jt or "data scientist" in st
+
+    if TARGET_ROLE in jt or TARGET_ROLE in st:
+        return True
+
+    if raw_category and raw_category.strip().upper() == "UNRELATED":
+        return True
+
+    return any(role in jt or role in st for role in UNRELATED_ROLES)
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +146,10 @@ def infer_job_category(job_title: str, search_term: str, raw_category: Optional[
     """
     if raw_category:
         cat = raw_category.strip().upper()
-        if cat in {"AI", "CS", "IT", "UNRELATED"}:
+        if cat in {"AI", "CS", "IT"}:
             return cat
+        if cat == "UNRELATED":
+            return "Unrelated"
 
     candidates = [s.lower() for s in [job_title or "", search_term or ""] if s]
 
@@ -354,12 +366,16 @@ def main():
 
     total_raw  = 0
     total_out  = 0
+    data_science_out = 0
+    unrelated_out    = 0
     skipped_missing = 0
     skipped_url_dup  = 0
     skipped_hash_dup = 0
     skipped_non_target = 0
 
-    with OUTPUT_FILE.open("w", encoding="utf-8") as out_f:
+    with OUTPUT_FILE.open("w", encoding="utf-8") as out_f, \
+         OUTPUT_DATA_SCIENCE_FILE.open("w", encoding="utf-8") as ds_f, \
+         OUTPUT_UNRELATED_FILE.open("w", encoding="utf-8") as unrelated_f:
 
         for file_path, loader_fn, label in sources:
 
@@ -373,7 +389,7 @@ def main():
             for norm in loader_fn(file_path):
                 total_raw += 1
                 # Filter to target role only
-                if not is_target_role(norm.get("job_title"), norm.get("search_term")):
+                if not is_target_role(norm.get("job_title"), norm.get("search_term"), norm.get("raw_category")):
                     skipped_non_target += 1
                     continue
                 source = norm["source"]
@@ -428,9 +444,17 @@ def main():
                     "clean_text":   clean_text_str,
                 }
 
-                out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                line = json.dumps(record, ensure_ascii=False) + "\n"
+                out_f.write(line)
                 total_out  += 1
                 source_count += 1
+
+                if category == "AI":
+                    ds_f.write(line)
+                    data_science_out += 1
+                elif category == "Unrelated":
+                    unrelated_f.write(line)
+                    unrelated_out += 1
 
                 if total_out % 200 == 0:
                     print(f"[INFO] Written {total_out} records so far...")
@@ -441,11 +465,15 @@ def main():
     print("=" * 50)
     print(f"  Raw records seen      : {total_raw}")
     print(f"  Written to output     : {total_out}")
+    print(f"    - data_science      : {data_science_out}")
+    print(f"    - unrelated         : {unrelated_out}")
     print(f"  Skipped (URL dup)     : {skipped_url_dup}")
     print(f"  Skipped (content dup) : {skipped_hash_dup}")
     print(f"  Skipped (empty/bad)   : {skipped_missing}")
     print(f"  Skipped (non-target)  : {skipped_non_target}")
-    print(f"  Output file           : {OUTPUT_FILE.resolve()}")
+    print(f"  Output file (all)     : {OUTPUT_FILE.resolve()}")
+    print(f"  Output file (DS)      : {OUTPUT_DATA_SCIENCE_FILE.resolve()}")
+    print(f"  Output file (unrel.)  : {OUTPUT_UNRELATED_FILE.resolve()}")
     print("=" * 50)
 
 

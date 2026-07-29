@@ -10,6 +10,7 @@ Output:
 
 Each output record contains:
   course_code | course code as listed (e.g. "COMP 1600")
+  course_name | course title as listed (e.g. "Introduction to Programming")
   skills      | SkillNER-friendly cleaned + tokenized text, built by combining
                 description, rationale, aims, learning_outcomes and course_content
 
@@ -220,6 +221,7 @@ def main():
 
         for rec in courses:
             course_code = rec.get("course_code")
+            course_name = rec.get("course_name")
 
             # --- Must have some combinable text ---
             raw_text = build_raw_skills_text(rec).strip()
@@ -245,6 +247,7 @@ def main():
 
             record = {
                 "course_code": course_code or None,
+                "course_name": course_name or None,
                 "skills":      skills_str,
             }
 
