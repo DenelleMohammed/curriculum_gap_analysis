@@ -46,7 +46,28 @@ logger.addHandler(console_handler)
 
 
 # ── Search Terms ───────────────────────────────────────────────
-SEARCH_TERM = 'Data Scientist'
+SEARCH_TERMS = {
+    "data_science": ["Data Scientist"],
+    "unrelated": [
+        "Registered Nurse",
+        "Primary School Teacher",
+        "Accountant",
+        "Human Resources Officer",
+        "Sales Representative",
+        "Restaurant Manager",
+        "Chef",
+        "Warehouse Supervisor",
+        "Construction Supervisor",
+        "Pharmacist",
+    ],
+}
+
+# Cap collected jobs per category so "unrelated" stays comparable in size
+# to the existing "data_science" group (~71 jobs previously collected from Reed).
+CATEGORY_TARGETS = {
+    "unrelated": 70,
+}
+
 BASE_URL = "https://www.reed.co.uk/jobs/{}-jobs?pageno={}"
 
 # ── Driver Setup ───────────────────────────────────────────────
@@ -169,21 +190,36 @@ def main():
     all_jobs = []
 
     try:
-        term = SEARCH_TERM
-        logger.info(f"Searching for term: {term}")
-        urls = get_job_urls(driver, term, pages=2)
-        logger.info(f"Total URLs found for '{term}': {len(urls)}")
+        for category, terms in SEARCH_TERMS.items():
+            target = CATEGORY_TARGETS.get(category)
+            # Cap applies per search term, not per category, so a single
+            # early term (e.g. "Registered Nurse") can't exhaust the whole
+            # category's quota before the other terms get a turn.
+            per_term_target = target // len(terms) if target is not None else None
+            category_jobs = []
 
-        for i, link in enumerate(urls, start=1):
-            logger.info(f"Scraping job {i}/{len(urls)}")
-            try:
-                job = scrape_job(driver, link, term)
-                if job["description"]:
-                    job["category"] = "data_science"
-                    all_jobs.append(job)
-                time.sleep(random.uniform(1, 3))
-            except Exception as e:
-                logger.error(f"Error scraping job {link}: {e}")
+            for term in terms:
+                logger.info(f"Searching for term: {term} (category: {category})")
+                urls = get_job_urls(driver, term, pages=2)
+                logger.info(f"Total URLs found for '{term}': {len(urls)}")
+
+                term_jobs = 0
+                for i, link in enumerate(urls, start=1):
+                    if per_term_target is not None and term_jobs >= per_term_target:
+                        logger.info(f"Reached per-term target of {per_term_target} for '{term}', moving to next term")
+                        break
+                    logger.info(f"Scraping job {i}/{len(urls)}")
+                    try:
+                        job = scrape_job(driver, link, term)
+                        if job["description"]:
+                            job["category"] = category
+                            category_jobs.append(job)
+                            term_jobs += 1
+                        time.sleep(random.uniform(1, 3))
+                    except Exception as e:
+                        logger.error(f"Error scraping job {link}: {e}")
+
+            all_jobs.extend(category_jobs)
 
     finally:
         driver.quit()

@@ -26,7 +26,25 @@ logging.basicConfig(
 )
 
 SEARCH_TERMS = {
-    "data_science": ["Data Scientist"]
+    "data_science": ["Data Scientist"],
+    "unrelated": [
+        "Registered Nurse",
+        "Primary School Teacher",
+        "Accountant",
+        "Human Resources Officer",
+        "Sales Representative",
+        "Restaurant Manager",
+        "Chef",
+        "Warehouse Supervisor",
+        "Construction Supervisor",
+        "Pharmacist",
+    ],
+}
+
+# Cap collected jobs per category so "unrelated" stays comparable in size
+# to the existing "data_science" group (~31 jobs previously collected from Workopolis).
+CATEGORY_TARGETS = {
+    "unrelated": 30,
 }
 
 
@@ -168,6 +186,12 @@ def main():
         for category, titles in SEARCH_TERMS.items():
 
             print(f"\nCATEGORY: {category}")
+            target = CATEGORY_TARGETS.get(category)
+            # Cap applies per search term, not per category, so a single
+            # early term (e.g. "Registered Nurse") can't exhaust the whole
+            # category's quota before the other terms get a turn.
+            per_term_target = target // len(titles) if target is not None else None
+            category_jobs = []
 
             # ✅ THIS LOOP MUST BE INDENTED INSIDE CATEGORY LOOP
             for term in titles:
@@ -178,17 +202,25 @@ def main():
 
                 print("Found", len(urls), "jobs")
 
+                term_jobs = 0
                 for u in urls:
+                    if per_term_target is not None and term_jobs >= per_term_target:
+                        print(f"Reached per-term target of {per_term_target} for '{term}', moving to next term")
+                        break
+
                     job = scrape_job(driver, u, term)
 
                     if job["description"]:
                         job["category"] = category
-                        all_jobs.append(job)
+                        category_jobs.append(job)
+                        term_jobs += 1
 
                     time.sleep(random.uniform(1,3))
 
                 # pause between search terms
                 time.sleep(random.uniform(3,6))
+
+            all_jobs.extend(category_jobs)
 
     finally:
         driver.quit()
