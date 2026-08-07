@@ -10,6 +10,7 @@ import time
 import random
 import logging
 from pathlib import Path
+from urllib.parse import urlparse
 import shutil
 import tempfile
 import uuid
@@ -97,6 +98,17 @@ def setup_driver():
         raise
 
 # ── Get Job URLs ───────────────────────────────────────────────
+def is_individual_job_url(link):
+    """Reed's search results also link to recruiter/employer hub pages
+    (e.g. /jobs/jobheron-106933/p106933 or /jobs/icaew/o553193), which
+    list that company's other postings instead of a single job description.
+    Individual job postings always end in a purely numeric ID
+    (e.g. /jobs/data-scientist/57069135); hub and listing pages don't."""
+    path = urlparse(link).path
+    last_segment = path.rstrip("/").split("/")[-1]
+    return last_segment.isdigit()
+
+
 def get_job_urls(driver, term, pages=2):
     urls = []
     keyword = term.lower().replace(" ", "-")
@@ -119,6 +131,8 @@ def get_job_urls(driver, term, pages=2):
             if link and "/jobs/" in link:
                 if link.startswith("/"):
                     link = "https://www.reed.co.uk" + link
+                if not is_individual_job_url(link):
+                    continue
                 if link not in urls:
                     urls.append(link)
 
