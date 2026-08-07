@@ -51,18 +51,18 @@ INVALID_EXACT      = {"e", "etc", "eg", "ie", "tools e", "san", "com", "etc.", "
 
 GENERIC_WORDS = {
     "build", "manage", "develop", "create", "support",
-    "maintain", "implement", "monitor", "design", "test"
+    "maintain", "implement", "monitor", "design", "test", "job"
 }
 
 # Multi-word and single phrases too generic to be meaningful skills
 GENERIC_PHRASES = {
-    "job description", "job descriptions",
+    "job description", "job descriptions", "job description job",
     "scale", "innovation", "collaboration", "operations",
     "workflows", "workflow", "automation", "governance",
     "research", "programming", "experimentation",
     "decision making", "problem solving",
     "computer science",   # too broad — captured by specific skills
-    "data science",       # the role itself, not a skill
+    "data science", "data science data",     # the role itself, not a skill
     "analytics",          # too vague without qualifier
 }
 
@@ -129,6 +129,12 @@ def is_valid_skill(skill: str) -> bool:
     if len(words) > 3:
         return False
     if all(word in GENERIC_WORDS for word in words):
+        return False
+    if len(words) != len(set(words)):
+        # SkillNER n-gram artifact: a word repeating within the same phrase
+        # (e.g. "data science data", "job description job") is never a real
+        # skill — it's a sliding-window collision, usually from stopword
+        # removal creating adjacency that wasn't in the original text.
         return False
     if re.fullmatch(r"[a-z]\s*[a-z]?", s):
         return False
