@@ -234,6 +234,26 @@ def _normalize_tech(text: str) -> str:
     return text
 
 
+# Source-specific page chrome (sidebars/footers) that the scrapers swept
+# into the description text along with the real job content. Truncating at
+# the earliest marker recovers the genuine description and drops the rest.
+_BOILERPLATE_MARKERS = {
+    "reed":       ["Browse jobs by locations"],
+    "workopolis": ["Our most similar jobs", "View more similar jobs"],
+}
+
+
+def strip_boilerplate(text: str, source: str) -> str:
+    if not text:
+        return text
+    cut_at = len(text)
+    for marker in _BOILERPLATE_MARKERS.get(source, []):
+        idx = text.find(marker)
+        if idx != -1:
+            cut_at = min(cut_at, idx)
+    return text[:cut_at].strip()
+
+
 def clean_text(raw: str) -> str:
     """
     Returns SkillNER-friendly cleaned text (not yet tokenized).
@@ -329,7 +349,7 @@ def iter_workopolis(path: Path) -> Iterator[Dict[str, Any]]:
             "search_term":  rec.get("search_term") or rec.get("searched_role"),
             "job_title":    rec.get("title") or rec.get("job_title", ""),
             "url":          rec.get("url"),
-            "description":  rec.get("description", ""),
+            "description":  strip_boilerplate(rec.get("description", ""), "workopolis"),
             "_rec":         rec,
         }
 
@@ -343,7 +363,7 @@ def iter_reed(path: Path) -> Iterator[Dict[str, Any]]:
             "search_term":  rec.get("search_term") or rec.get("searched_role"),
             "job_title":    rec.get("title") or rec.get("job_title", ""),
             "url":          rec.get("url"),
-            "description":  rec.get("description", ""),
+            "description":  strip_boilerplate(rec.get("description", ""), "reed"),
             "_rec":         rec,
         }
 
