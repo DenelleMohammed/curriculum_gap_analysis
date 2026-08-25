@@ -27,6 +27,8 @@ from spacy.matcher import PhraseMatcher
 from skillNer.general_params import SKILL_DB
 from skillNer.skill_extractor_class import SkillExtractor
 
+from skill_normalisation import canonicalise_skill, is_junk_skill
+
 
 # ==============================
 # CONFIG
@@ -105,7 +107,10 @@ def normalize_skill(skill: str) -> str:
         "cloud services":   "cloud",
         "sql azure":        "azure sql",
     }
-    return replacements.get(s, s)
+    s = replacements.get(s, s)
+    # British spelling + singular head word, shared with the course extractor so
+    # the two corpora produce matching tokens for the same skill.
+    return canonicalise_skill(s)
 
 
 def is_valid_skill(skill: str) -> bool:
@@ -115,6 +120,8 @@ def is_valid_skill(skill: str) -> bool:
         return False
     if s in VALID_SHORT_SKILLS:
         return True
+    if is_junk_skill(s):
+        return False
     if s in INVALID_EXACT:
         return False
     if len(s) == 1:
@@ -171,7 +178,7 @@ def extract_unique_skills(annotation: Dict[str, Any]) -> List[str]:
             if not name:
                 continue
             score = float(it.get("score", 0.0) or 0.0)
-            if score < 0.5:
+            if score < 0.7:
                 continue
             key = name.lower()
             if key not in best or score > best[key]:
