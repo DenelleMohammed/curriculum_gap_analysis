@@ -29,6 +29,8 @@ from spacy.matcher import PhraseMatcher
 from skillNer.general_params import SKILL_DB
 from skillNer.skill_extractor_class import SkillExtractor
 
+from skill_normalisation import canonicalise_skill, is_junk_skill
+
 
 # ==============================
 # CONFIG
@@ -123,7 +125,10 @@ def normalize_skill(text: str) -> str:
     text = text.strip().lower()
     text = re.sub(r"\s+", " ", text)
     text = canonicalize_symbolic_skills(text)
-    return REPLACEMENTS.get(text, text)
+    text = REPLACEMENTS.get(text, text)
+    # British spelling + singular head word, shared with the job extractor so
+    # the two corpora produce matching tokens for the same skill.
+    return canonicalise_skill(text)
 
 
 # ==============================
@@ -171,6 +176,8 @@ def looks_like_noise(skill: str) -> bool:
     if len(skill) == 1 and skill not in VALID_SINGLE_TOKENS:
         return True
     if skill in BAD_SINGLE_TOKENS:
+        return True
+    if is_junk_skill(skill):
         return True
     if is_repeated_phrase(skill):
         return True
