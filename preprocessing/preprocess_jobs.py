@@ -53,7 +53,6 @@ OUTPUT_FILE             = OUTPUT_DIR / "all_jobs_preprocessed.jsonl"
 OUTPUT_DATA_SCIENCE_FILE = OUTPUT_DIR / "data_science_jobs_preprocessed.jsonl"
 OUTPUT_UNRELATED_FILE    = OUTPUT_DIR / "unrelated_jobs_preprocessed.jsonl"
 
-LINKEDIN_FILE   = DATA_DIR / "linkedin_jobs.jsonl"
 WORKOPOLIS_FILE = DATA_DIR / "workopolis_jobs.json"
 REED_FILE       = DATA_DIR / "reed_jobs.json"
 
@@ -102,8 +101,8 @@ def detect_region_from_url(url: Optional[str]) -> str:
         return "UK"
     if "workopolis.com" in url:
         return "Canada"
-    if "linkedin.com" in url:
-        return "International"
+    # if "linkedin.com" in url:
+    #     return "International"
     return "Unknown"
 
 
@@ -376,7 +375,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     sources = [
-        (LINKEDIN_FILE,   iter_linkedin,   "LinkedIn"),
+        # (LINKEDIN_FILE,   iter_linkedin,   "LinkedIn"),
         (WORKOPOLIS_FILE, iter_workopolis, "Workopolis"),
         (REED_FILE,       iter_reed,       "Reed UK"),
     ]
