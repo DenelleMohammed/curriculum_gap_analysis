@@ -46,7 +46,7 @@ JOB_FILES = [
 ]
 
 SPACY_MODEL = "en_core_web_sm"
-MIN_FREQ    = 3    # lower than previous project since we're scoped to one role
+MIN_FREQ    = 2    # lower than previous project since we're scoped to one role
 
 VALID_SHORT_SKILLS = {"ai", "ml", "c", "r", "go", "c#", "c++"}
 INVALID_EXACT      = {"e", "etc", "eg", "ie", "tools e", "san", "com", "etc.", "eg.", "ie.", "tools e.", "san."}
